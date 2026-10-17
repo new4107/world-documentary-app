@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TERRA — World Documentary & Country Explorer</title>
-    <meta name="description" content="Explore every nation in the world with AI-powered search, regional filters, demographic data, flags, and immersive short documentary essays.">
+    <title>World — Country Explorer</title>
+    <meta name="description" content="Explore every nation in the world with fast search, regional filters, demographic data, flags, and cultural profiles.">
     
-    <!-- Google Fonts: Plus Jakarta Sans & Outfit for cinematic documentary typography -->
+    <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -26,8 +26,8 @@
                     </svg>
                 </div>
                 <div class="brand-text">
-                    <h1>TERRA <span class="brand-badge">DOCUMENTARY</span></h1>
-                    <p class="brand-subtitle">Interactive Global Encyclopedia & AI Locality Explorer</p>
+                    <h1>World</h1>
+                    <p class="brand-subtitle">Interactive Global Encyclopedia</p>
                 </div>
             </div>
 
@@ -60,15 +60,9 @@
     <main class="main-content">
         <!-- Hero / Controls Bar -->
         <section class="controls-section">
-            <div class="controls-container">
-                <!-- AI Integrated Search Bar -->
+            <div class="search-and-filter-wrapper">
+                <!-- Search Bar with Integrated Filter Trigger -->
                 <div class="search-box-wrapper">
-                    <div class="ai-badge-indicator" title="Powered by Gemini AI & Locality Intelligence">
-                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-                            <path d="M12 2L14.4 7.2L20 9.6L14.4 12L12 17.2L9.6 12L4 9.6L9.6 7.2L12 2Z"></path>
-                        </svg>
-                        <span>AI SEARCH</span>
-                    </div>
                     <div class="search-input-group">
                         <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
                             <circle cx="11" cy="11" r="8"></circle>
@@ -78,7 +72,7 @@
                             type="text" 
                             id="search-input" 
                             class="search-input" 
-                            placeholder="Search by country, locality, or ethnic group (e.g. 'Yoruba', 'Africa', 'Nordic', 'Inuit')..." 
+                            placeholder="Search countries, regions, or localities (e.g. Nigeria, Yoruba, Nordic)..." 
                             aria-label="Search countries or localities"
                             autocomplete="off"
                         >
@@ -89,44 +83,58 @@
                             </svg>
                         </button>
                     </div>
-                    <button id="ai-search-trigger-btn" class="ai-search-btn" title="Run AI Semantic Search">
-                        <span>Ask AI</span>
+
+                    <!-- Filter Button inside Search Bar -->
+                    <button id="filter-toggle-btn" class="filter-toggle-btn" aria-expanded="false" aria-controls="filter-panel" title="Filter by Region & Sort">
+                        <svg class="filter-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span>Filter</span>
+                        <span id="active-filter-badge" class="active-filter-badge hidden">0</span>
+                        <svg class="filter-chevron" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
                     </button>
                 </div>
 
-                <!-- Region Dropdown Button -->
-                <div class="filter-dropdown-group">
-                    <label for="region-select" class="dropdown-label">Region:</label>
-                    <div class="custom-select-wrapper">
-                        <select id="region-select" class="region-select" aria-label="Filter by Region">
-                            <option value="All">All Regions</option>
-                            <option value="Africa">Africa</option>
-                            <option value="Americas">Americas</option>
-                            <option value="Asia">Asia</option>
-                            <option value="Europe">Europe</option>
-                            <option value="Oceania">Oceania</option>
-                            <option value="Antarctic">Antarctic</option>
-                        </select>
-                        <svg class="select-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </div>
-                </div>
+                <!-- Collapsible Filter Panel under the Search Bar -->
+                <div id="filter-panel" class="filter-panel hidden">
+                    <div class="filter-panel-inner">
+                        <!-- Region Dropdown -->
+                        <div class="filter-panel-group">
+                            <label for="region-select" class="filter-label">Region:</label>
+                            <div class="custom-select-wrapper">
+                                <select id="region-select" class="region-select" aria-label="Filter by Region">
+                                    <option value="All">All Regions</option>
+                                    <option value="Africa">Africa</option>
+                                    <option value="Americas">Americas</option>
+                                    <option value="Asia">Asia</option>
+                                    <option value="Europe">Europe</option>
+                                    <option value="Oceania">Oceania</option>
+                                    <option value="Antarctic">Antarctic</option>
+                                </select>
+                                <svg class="select-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                        </div>
 
-                <!-- Sort Selector -->
-                <div class="filter-dropdown-group">
-                    <label for="sort-select" class="dropdown-label">Sort:</label>
-                    <div class="custom-select-wrapper">
-                        <select id="sort-select" class="region-select" aria-label="Sort Countries">
-                            <option value="name-asc">Name (A — Z)</option>
-                            <option value="name-desc">Name (Z — A)</option>
-                            <option value="pop-desc">Population (High — Low)</option>
-                            <option value="pop-asc">Population (Low — High)</option>
-                            <option value="area-desc">Area (Largest — Smallest)</option>
-                        </select>
-                        <svg class="select-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
+                        <!-- Sort Dropdown -->
+                        <div class="filter-panel-group">
+                            <label for="sort-select" class="filter-label">Sort:</label>
+                            <div class="custom-select-wrapper">
+                                <select id="sort-select" class="region-select" aria-label="Sort Countries">
+                                    <option value="name-asc">Name (A — Z)</option>
+                                    <option value="name-desc">Name (Z — A)</option>
+                                    <option value="pop-desc">Population (High — Low)</option>
+                                    <option value="pop-asc">Population (Low — High)</option>
+                                    <option value="area-desc">Area (Largest — Smallest)</option>
+                                </select>
+                                <svg class="select-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -263,11 +271,14 @@
                                 </svg>
                                 <span>Narrate Essay</span>
                             </button>
-                            <button id="ai-deep-dive-btn" class="ai-deep-dive-btn" title="Generate expanded AI documentary essay using Gemini">
+                            <button id="ai-deep-dive-btn" class="ai-deep-dive-btn" title="Generate expanded essay profile">
                                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-                                    <path d="M12 2L14.4 7.2L20 9.6L14.4 12L12 17.2L9.6 12L4 9.6L9.6 7.2L12 2Z"></path>
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
                                 </svg>
-                                <span>AI Deep Dive</span>
+                                <span>Extended Essay</span>
                             </button>
                         </div>
                     </div>

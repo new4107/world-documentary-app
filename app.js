@@ -21,7 +21,9 @@ let isSpeaking = false;
 const countriesGrid = document.getElementById("countries-grid");
 const searchInput = document.getElementById("search-input");
 const clearSearchBtn = document.getElementById("clear-search-btn");
-const aiSearchBtn = document.getElementById("ai-search-trigger-btn");
+const filterToggleBtn = document.getElementById("filter-toggle-btn");
+const filterPanel = document.getElementById("filter-panel");
+const activeFilterBadge = document.getElementById("active-filter-badge");
 const regionSelect = document.getElementById("region-select");
 const sortSelect = document.getElementById("sort-select");
 const themeToggleBtn = document.getElementById("theme-toggle-btn");
@@ -105,17 +107,27 @@ function initEventListeners() {
         searchInput.focus();
     });
 
-    // AI Search Trigger Button
-    aiSearchBtn.addEventListener("click", () => {
-        const query = searchInput.value.trim();
-        if (query) {
-            performAiSemanticSearch(query);
-        } else {
-            searchInput.focus();
-        }
-    });
+    // Filter Toggle Button
+    if (filterToggleBtn && filterPanel) {
+        filterToggleBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const willOpen = filterPanel.classList.contains("hidden");
+            filterPanel.classList.toggle("hidden", !willOpen);
+            filterToggleBtn.setAttribute("aria-expanded", willOpen);
+            filterToggleBtn.classList.toggle("active", willOpen);
+        });
 
-    // Enter Key in Search Bar triggers AI Search if query is complex
+        // Close Filter Panel when clicking outside
+        document.addEventListener("click", (e) => {
+            if (filterPanel && !filterPanel.contains(e.target) && filterToggleBtn && !filterToggleBtn.contains(e.target)) {
+                filterPanel.classList.add("hidden");
+                filterToggleBtn.setAttribute("aria-expanded", "false");
+                filterToggleBtn.classList.remove("active");
+            }
+        });
+    }
+
+    // Enter Key in Search Bar triggers search
     searchInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
             const query = searchInput.value.trim();
@@ -128,12 +140,14 @@ function initEventListeners() {
     // Region Dropdown
     regionSelect.addEventListener("change", (e) => {
         currentRegionFilter = e.target.value;
+        updateFilterBadge();
         applyFiltersAndSort();
     });
 
     // Sort Selector
     sortSelect.addEventListener("change", (e) => {
         currentSortOrder = e.target.value;
+        updateFilterBadge();
         applyFiltersAndSort();
     });
 
@@ -189,6 +203,64 @@ function initEventListeners() {
             generateAiExtendedEssay(currentActiveCountry);
         }
     });
+}
+
+/**
+ * Update the active filter count badge on the Filter button
+ */
+function updateFilterBadge() {
+    let count = 0;
+    if (currentRegionFilter !== "All") count++;
+    if (currentSortOrder !== "name-asc") count++;
+    if (activeFilterBadge) {
+        if (count > 0) {
+            activeFilterBadge.textContent = count;
+            activeFilterBadge.classList.remove("hidden");
+            if (filterToggleBtn) filterToggleBtn.classList.add("has-active-filters");
+        } else {
+            activeFilterBadge.classList.add("hidden");
+            if (filterToggleBtn) filterToggleBtn.classList.remove("has-active-filters");
+        }
+    }
+}
+
+/**
+ * Resolve country population from the global verified database or country object
+ */
+function resolveCountryPopulation(country) {
+    if (typeof WORLD_POPULATION_DATA !== "undefined") {
+        if (country.cca3 && WORLD_POPULATION_DATA[country.cca3] !== undefined) {
+            return WORLD_POPULATION_DATA[country.cca3];
+        }
+        if (country.cca2 && WORLD_POPULATION_DATA[country.cca2] !== undefined) {
+            return WORLD_POPULATION_DATA[country.cca2];
+        }
+        const commonName = (country.name?.common || "").toLowerCase();
+        if (WORLD_POPULATION_DATA[commonName] !== undefined) {
+            return WORLD_POPULATION_DATA[commonName];
+        }
+        const officialName = (country.name?.official || "").toLowerCase();
+        if (WORLD_POPULATION_DATA[officialName] !== undefined) {
+            return WORLD_POPULATION_DATA[officialName];
+        }
+    }
+    if (typeof country.population === "number") {
+        return country.population;
+    }
+    return 0;
+}
+
+/**
+ * Cleanly format population with thousands commas or uninhabited tag
+ */
+function formatPopulationDisplay(pop) {
+    if (pop === 0 || pop === "0") {
+        return "0 (Uninhabited)";
+    }
+    if (typeof pop === "number") {
+        return pop.toLocaleString();
+    }
+    return pop ? String(pop) : "0";
 }
 
 // API Endpoints for resilient data fetching
@@ -249,7 +321,13 @@ async function fetchCountryData() {
     }
 
     if (fetchedData && fetchedData.length > 0) {
-        allCountriesData = fetchedData.filter(country => country.name && (country.name.common || typeof country.name === "string"));
+        allCountriesData = fetchedData
+            .filter(country => country.name && (country.name.common || typeof country.name === "string"))
+            .map(country => {
+                // Fill population voids using verified global population database
+                country.population = resolveCountryPopulation(country);
+                return country;
+            });
         hideLoadingState();
         applyFiltersAndSort();
     } else {
@@ -488,7 +566,7 @@ function createCountryCard(country) {
     const officialName = country.name?.official || name;
     const region = country.region || "Global";
     const capital = country.capital && country.capital.length > 0 ? country.capital[0] : "N/A";
-    const populationFormatted = country.population ? country.population.toLocaleString() : "N/A";
+    const populationFormatted = formatPopulationDisplay(country.population);
 
     card.innerHTML = `
         <!-- Flag Visible inside Card -->
@@ -576,7 +654,7 @@ function openCountryModal(country) {
     const region = country.region || "Global";
     const subregion = country.subregion || region;
     const capital = country.capital && country.capital.length > 0 ? country.capital.join(", ") : "N/A";
-    const popFormatted = country.population ? country.population.toLocaleString() : "N/A";
+    const popFormatted = formatPopulationDisplay(country.population);
     const areaFormatted = country.area ? `${country.area.toLocaleString()} km²` : "N/A";
     
     // Languages
