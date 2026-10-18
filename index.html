@@ -304,6 +304,91 @@
         </div>
     </div>
 
+    <!-- Floating Comparison Tray (appears when 1-3 countries selected) -->
+    <div id="compare-tray" class="compare-tray hidden" role="region" aria-label="Country Comparison Tray">
+        <div class="compare-tray-content">
+            <div class="compare-tray-info">
+                <span class="compare-tray-title">Compare Countries</span>
+                <span id="compare-tray-count" class="compare-tray-badge">0 / 3</span>
+            </div>
+            <div id="compare-tray-items" class="compare-tray-items">
+                <!-- Selected country thumbnails inserted here -->
+            </div>
+            <div class="compare-tray-actions">
+                <button id="compare-clear-btn" class="compare-tray-btn secondary" title="Clear selection">Clear</button>
+                <button id="compare-launch-btn" class="compare-tray-btn primary" disabled title="Compare selected countries (at least 2 required)">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    <span>Compare (<span id="compare-launch-count">0</span>)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Country Comparison Modal -->
+    <div id="comparison-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="comparison-modal-title">
+        <div class="modal-content comparison-modal-content">
+            <button id="comparison-modal-close-btn" class="modal-close-btn" aria-label="Close comparison modal">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+
+            <!-- Comparison Header -->
+            <div class="comparison-header">
+                <div class="comparison-header-badge">Side-by-Side Analysis</div>
+                <h2 id="comparison-modal-title" class="comparison-title">Nation Comparison</h2>
+                <p id="comparison-modal-subtitle" class="comparison-subtitle">Comparing 2-3 sovereign nations across demographic, geographic, and cultural indicators.</p>
+            </div>
+
+            <!-- Comparison Body -->
+            <div class="comparison-body">
+                <!-- Side-by-side Country Grid -->
+                <div id="comparison-grid" class="comparison-grid">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <!-- Comparative Essay Section -->
+                <div class="comparison-essay-card">
+                    <div class="essay-header">
+                        <div class="essay-title-group">
+                            <svg class="essay-icon" viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+                            </svg>
+                            <h3>Comparative Documentary Essay</h3>
+                        </div>
+                        <div class="essay-actions">
+                            <button id="compare-read-aloud-btn" class="read-aloud-btn hidden" title="Listen to comparative essay narration">
+                                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                                </svg>
+                                <span>Narrate Essay</span>
+                            </button>
+                            <button id="generate-compare-essay-btn" class="ai-deep-dive-btn" title="Generate comparative essay using AI">
+                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                </svg>
+                                <span>Generate Comparative Essay</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="compare-essay-content" class="essay-content compare-essay-box">
+                        <div class="compare-essay-placeholder">
+                            <p>Click <strong>"Generate Comparative Essay"</strong> above to synthesize an AI-powered documentary essay contrasting these nations' history, culture, geography, and modern global presence.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="localityData.js"></script>
     <script src="app.js"></script>

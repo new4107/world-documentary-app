@@ -16,6 +16,8 @@ let currentSortOrder = "name-asc";
 let currentSearchQuery = "";
 let currentActiveCountry = null;
 let isSpeaking = false;
+let selectedCompareCountries = []; // Holds up to 3 selected country objects
+let isCompareSpeaking = false;
 
 // DOM Elements
 const countriesGrid = document.getElementById("countries-grid");
@@ -38,7 +40,7 @@ const retryBtn = document.getElementById("retry-btn");
 const noResultsContainer = document.getElementById("no-results-container");
 const resetFiltersBtn = document.getElementById("reset-filters-btn");
 
-// Modal DOM Elements
+// Country Detail Modal DOM Elements
 const countryModal = document.getElementById("country-modal");
 const modalCloseBtn = document.getElementById("modal-close-btn");
 const modalFlagImg = document.getElementById("modal-flag-img");
@@ -56,6 +58,20 @@ const essayContent = document.getElementById("essay-content");
 const readAloudBtn = document.getElementById("read-aloud-btn");
 const aiDeepDiveBtn = document.getElementById("ai-deep-dive-btn");
 const modalMapLink = document.getElementById("modal-map-link");
+
+// Comparison Feature DOM Elements
+const compareTray = document.getElementById("compare-tray");
+const compareTrayCount = document.getElementById("compare-tray-count");
+const compareTrayItems = document.getElementById("compare-tray-items");
+const compareClearBtn = document.getElementById("compare-clear-btn");
+const compareLaunchBtn = document.getElementById("compare-launch-btn");
+const compareLaunchCount = document.getElementById("compare-launch-count");
+const comparisonModal = document.getElementById("comparison-modal");
+const comparisonModalCloseBtn = document.getElementById("comparison-modal-close-btn");
+const comparisonGrid = document.getElementById("comparison-grid");
+const generateCompareEssayBtn = document.getElementById("generate-compare-essay-btn");
+const compareEssayContent = document.getElementById("compare-essay-content");
+const compareReadAloudBtn = document.getElementById("compare-read-aloud-btn");
 
 /**
  * Initialize the application on DOMContentLoaded
@@ -203,6 +219,41 @@ function initEventListeners() {
             generateAiExtendedEssay(currentActiveCountry);
         }
     });
+
+    // Comparison Event Listeners
+    if (compareClearBtn) {
+        compareClearBtn.addEventListener("click", clearCompareSelection);
+    }
+
+    if (compareLaunchBtn) {
+        compareLaunchBtn.addEventListener("click", openComparisonModal);
+    }
+
+    if (comparisonModalCloseBtn) {
+        comparisonModalCloseBtn.addEventListener("click", closeComparisonModal);
+    }
+
+    if (comparisonModal) {
+        comparisonModal.addEventListener("click", (e) => {
+            if (e.target === comparisonModal) {
+                closeComparisonModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && comparisonModal && !comparisonModal.classList.contains("hidden")) {
+            closeComparisonModal();
+        }
+    });
+
+    if (generateCompareEssayBtn) {
+        generateCompareEssayBtn.addEventListener("click", generateComparativeEssay);
+    }
+
+    if (compareReadAloudBtn) {
+        compareReadAloudBtn.addEventListener("click", toggleCompareSpeechSynthesis);
+    }
 }
 
 /**
@@ -555,9 +606,13 @@ function renderCountryCards(countries) {
  */
 function createCountryCard(country) {
     const card = document.createElement("article");
-    card.className = "country-card";
+    const cca3 = country.cca3 || country.cca2 || "";
+    const isSelected = selectedCompareCountries.some(c => (c.cca3 && c.cca3 === cca3) || (c.cca2 && c.cca2 === country.cca2));
+    
+    card.className = `country-card ${isSelected ? 'selected-for-compare' : ''}`;
     card.setAttribute("role", "button");
     card.setAttribute("tabindex", "0");
+    card.setAttribute("data-cca3", cca3);
     card.setAttribute("aria-label", `View documentary details for ${country.name?.common}`);
 
     const flagUrl = getCountryFlagUrl(country);
@@ -571,6 +626,13 @@ function createCountryCard(country) {
     card.innerHTML = `
         <!-- Flag Visible inside Card -->
         <div class="card-flag-wrapper">
+            <button class="card-compare-btn ${isSelected ? 'active' : ''}" type="button" title="${isSelected ? 'Remove from comparison' : 'Add to comparison (up to 3)'}">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>${isSelected ? 'Compared' : 'Compare'}</span>
+            </button>
             <img src="${flagUrl}" alt="${flagAlt}" class="card-flag" loading="lazy">
             <div class="card-flag-overlay"></div>
             <span class="card-region-badge">${region}</span>
@@ -629,11 +691,24 @@ function createCountryCard(country) {
         </div>
     `;
 
+    // Compare button handler (stops card click from opening single modal)
+    const compareBtn = card.querySelector(".card-compare-btn");
+    if (compareBtn) {
+        compareBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleCompareCountry(country);
+        });
+    }
+
     // Click & Keyboard Enter event to popup further details and short essay
     const openModalHandler = () => openCountryModal(country);
-    card.addEventListener("click", openModalHandler);
+    card.addEventListener("click", (e) => {
+        if (e.target.closest(".card-compare-btn")) return;
+        openModalHandler();
+    });
     card.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
+            if (e.target.closest(".card-compare-btn")) return;
             e.preventDefault();
             openModalHandler();
         }
@@ -864,5 +939,482 @@ function showErrorState(message) {
 function updateResultsCount(count) {
     if (resultsCountEl) {
         resultsCountEl.textContent = count;
+    }
+}
+
+/* ==========================================================================
+   9. COUNTRY COMPARISON CONTROLLER
+   Manages multi-country selection (max 3), bottom tray, side-by-side metrics,
+   and Gemini AI comparative documentary essays with Web Speech narration.
+   ========================================================================== */
+
+/**
+ * Toggle selection of a country for comparison (up to 3)
+ */
+function toggleCompareCountry(country) {
+    const cca3 = country.cca3 || country.cca2 || "";
+    const index = selectedCompareCountries.findIndex(c => (c.cca3 && c.cca3 === cca3) || (c.cca2 && c.cca2 === country.cca2));
+
+    if (index > -1) {
+        // Deselect
+        selectedCompareCountries.splice(index, 1);
+    } else {
+        // Select if under max limit of 3
+        if (selectedCompareCountries.length >= 3) {
+            alert("You can compare up to 3 countries at a time. Please remove one from your comparison tray first.");
+            return;
+        }
+        selectedCompareCountries.push(country);
+    }
+
+    updateCompareUI();
+}
+
+/**
+ * Remove a single country from comparison by cca3 or cca2
+ */
+function removeCompareCountry(code) {
+    selectedCompareCountries = selectedCompareCountries.filter(c => c.cca3 !== code && c.cca2 !== code);
+    updateCompareUI();
+}
+
+/**
+ * Clear all selected comparison countries
+ */
+function clearCompareSelection() {
+    selectedCompareCountries = [];
+    updateCompareUI();
+}
+
+/**
+ * Update the bottom tray, counters, and card states across the grid
+ */
+function updateCompareUI() {
+    const count = selectedCompareCountries.length;
+
+    // Update Bottom Tray Visibility & Count
+    if (compareTray) {
+        if (count > 0) {
+            compareTray.classList.remove("hidden");
+        } else {
+            compareTray.classList.add("hidden");
+        }
+    }
+
+    if (compareTrayCount) {
+        compareTrayCount.textContent = `${count} / 3`;
+    }
+
+    if (compareLaunchBtn) {
+        compareLaunchBtn.disabled = count < 2;
+    }
+
+    if (compareLaunchCount) {
+        compareLaunchCount.textContent = count;
+    }
+
+    // Render Country Chips inside Tray
+    if (compareTrayItems) {
+        compareTrayItems.innerHTML = "";
+        selectedCompareCountries.forEach(country => {
+            const flagUrl = getCountryFlagUrl(country);
+            const name = country.name?.common || "Nation";
+            const code = country.cca3 || country.cca2 || "";
+
+            const chip = document.createElement("div");
+            chip.className = "compare-chip";
+            chip.innerHTML = `
+                <img src="${flagUrl}" alt="${name}" class="compare-chip-flag">
+                <span>${name}</span>
+                <button class="compare-chip-remove" type="button" aria-label="Remove ${name}" title="Remove">✕</button>
+            `;
+
+            const removeBtn = chip.querySelector(".compare-chip-remove");
+            removeBtn.addEventListener("click", () => {
+                removeCompareCountry(code);
+            });
+
+            compareTrayItems.appendChild(chip);
+        });
+    }
+
+    // Synchronize Card Buttons in Grid
+    const cards = document.querySelectorAll(".country-card");
+    cards.forEach(card => {
+        const cardCca3 = card.getAttribute("data-cca3");
+        const isSelected = selectedCompareCountries.some(c => (c.cca3 && c.cca3 === cardCca3) || (c.cca2 && c.cca2 === cardCca3));
+
+        card.classList.toggle("selected-for-compare", isSelected);
+        const btn = card.querySelector(".card-compare-btn");
+        if (btn) {
+            btn.classList.toggle("active", isSelected);
+            btn.title = isSelected ? "Remove from comparison" : "Add to comparison (up to 3)";
+            const span = btn.querySelector("span");
+            if (span) {
+                span.textContent = isSelected ? "Compared" : "Compare";
+            }
+        }
+    });
+}
+
+/**
+ * Open the Country Comparison Modal with side-by-side indicators
+ */
+function openComparisonModal() {
+    if (selectedCompareCountries.length < 2) {
+        alert("Please select at least 2 countries to compare.");
+        return;
+    }
+
+    // Determine max population and max area for comparative badges
+    const validPopulations = selectedCompareCountries.map(c => c.population || 0);
+    const maxPop = Math.max(...validPopulations);
+    const validAreas = selectedCompareCountries.map(c => c.area || 0);
+    const maxArea = Math.max(...validAreas);
+
+    // Populate Side-by-Side Grid
+    if (comparisonGrid) {
+        comparisonGrid.innerHTML = "";
+        selectedCompareCountries.forEach(country => {
+            const flagUrl = getCountryFlagUrl(country);
+            const name = country.name?.common || "Unknown Nation";
+            const officialName = country.name?.official || name;
+            const region = country.region || "Global";
+            const subregion = country.subregion || region;
+            const capital = country.capital && country.capital.length > 0 ? country.capital.join(", ") : "N/A";
+            const pop = country.population || 0;
+            const popFormatted = formatPopulationDisplay(pop);
+            const area = country.area || 0;
+            const areaFormatted = area ? `${area.toLocaleString()} km²` : "N/A";
+
+            // Languages
+            const languages = country.languages ? Object.values(country.languages).join(", ") : "N/A";
+
+            // Currencies
+            let currenciesStr = "N/A";
+            if (country.currencies) {
+                currenciesStr = Object.values(country.currencies)
+                    .map(curr => `${curr.name} (${curr.symbol || ""})`)
+                    .join(", ");
+            }
+
+            // Borders
+            let bordersStr = "None (Island or Isolated)";
+            if (country.borders && country.borders.length > 0) {
+                const borderNames = country.borders.map(code => {
+                    const found = allCountriesData.find(c => c.cca3 === code || c.cca2 === code);
+                    return found ? found.name.common : code;
+                });
+                bordersStr = `${country.borders.length} (${borderNames.join(", ")})`;
+            }
+
+            const isLargestPop = maxPop > 0 && pop === maxPop && selectedCompareCountries.length > 1;
+            const isLargestArea = maxArea > 0 && area === maxArea && selectedCompareCountries.length > 1;
+
+            const col = document.createElement("div");
+            col.className = "compare-col";
+            col.innerHTML = `
+                <div class="compare-col-header">
+                    <img src="${flagUrl}" alt="Flag of ${name}" class="compare-col-flag">
+                    <div class="compare-col-overlay"></div>
+                    <span class="compare-col-badge">${region}</span>
+                </div>
+                <div class="compare-col-title-area">
+                    <h3 class="compare-col-name">${name}</h3>
+                    <p class="compare-col-official" title="${officialName}">${officialName}</p>
+                </div>
+                <div class="compare-metrics-list">
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Capital City</span>
+                        <span class="compare-metric-value">${capital}</span>
+                    </div>
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Subregion</span>
+                        <span class="compare-metric-value">${subregion}</span>
+                    </div>
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Population</span>
+                        <span class="compare-metric-value">
+                            ${popFormatted}
+                            ${isLargestPop ? '<span class="metric-highlight-badge">Largest</span>' : ''}
+                        </span>
+                    </div>
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Land Area</span>
+                        <span class="compare-metric-value">
+                            ${areaFormatted}
+                            ${isLargestArea ? '<span class="metric-highlight-badge">Largest</span>' : ''}
+                        </span>
+                    </div>
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Official Languages</span>
+                        <span class="compare-metric-value">${languages}</span>
+                    </div>
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Currency</span>
+                        <span class="compare-metric-value">${currenciesStr}</span>
+                    </div>
+                    <div class="compare-metric-row">
+                        <span class="compare-metric-label">Bordering Nations</span>
+                        <span class="compare-metric-value">${bordersStr}</span>
+                    </div>
+                </div>
+            `;
+
+            comparisonGrid.appendChild(col);
+        });
+    }
+
+    // Reset Comparative Essay Box
+    if (compareEssayContent) {
+        const countryNames = selectedCompareCountries.map(c => c.name?.common).join(", ");
+        compareEssayContent.innerHTML = `
+            <div class="compare-essay-placeholder">
+                <p>Click <strong>"Generate Comparative Essay"</strong> above to generate an AI documentary essay analyzing <strong>${countryNames}</strong> side-by-side.</p>
+            </div>
+        `;
+    }
+
+    if (compareReadAloudBtn) {
+        compareReadAloudBtn.classList.add("hidden");
+    }
+
+    // Show modal & prevent background scrolling
+    if (comparisonModal) {
+        comparisonModal.classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+        if (comparisonModalCloseBtn) {
+            comparisonModalCloseBtn.focus();
+        }
+    }
+}
+
+/**
+ * Close the Country Comparison Modal
+ */
+function closeComparisonModal() {
+    if (isCompareSpeaking && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        isCompareSpeaking = false;
+        if (compareReadAloudBtn) {
+            compareReadAloudBtn.classList.remove("speaking");
+            const label = compareReadAloudBtn.querySelector("span");
+            if (label) label.textContent = "Narrate Essay";
+        }
+    }
+
+    if (comparisonModal) {
+        comparisonModal.classList.add("hidden");
+    }
+    document.body.style.overflow = "";
+}
+
+/**
+ * Generate Comparative Documentary Essay via Google Gemini AI
+ */
+async function generateComparativeEssay() {
+    if (selectedCompareCountries.length < 2) return;
+
+    const countryNames = selectedCompareCountries.map(c => c.name?.common || "Nation");
+    const namesList = countryNames.join(", ");
+
+    if (compareEssayContent) {
+        compareEssayContent.innerHTML = `
+            <div class="essay-loading" style="padding: 2rem 0; justify-content: center;">
+                <div class="loading-spinner" style="width: 28px; height: 28px; margin: 0;"></div>
+                <span>Synthesizing Comparative Documentary Essay for ${namesList} via Gemini AI...</span>
+            </div>
+        `;
+    }
+
+    // Build context summary for the prompt
+    const countryContexts = selectedCompareCountries.map(c => {
+        const name = c.name?.common;
+        const region = c.region;
+        const capital = c.capital ? c.capital.join(", ") : "N/A";
+        const pop = formatPopulationDisplay(c.population);
+        const area = c.area ? `${c.area.toLocaleString()} km²` : "N/A";
+        const lang = c.languages ? Object.values(c.languages).join(", ") : "N/A";
+        return `${name} (Region: ${region}, Capital: ${capital}, Population: ${pop}, Area: ${area}, Languages: ${lang})`;
+    }).join("\n");
+
+    const promptText = `
+    You are a world-renowned documentary historian, geographer, and cultural ethnographer.
+    Write an authoritative, engaging, and literary comparative essay comparing these ${selectedCompareCountries.length} nations:
+    ${countryContexts}
+
+    Structure the comparative essay in 4 distinct sections with clear thematic subheadings:
+    1. Geographic & Environmental Juxtaposition: Contrast their terrain, scale, climate, and ecological significance.
+    2. Historical Crossroads & Divergence: Analyze their civilizational roots, historical trajectories, and how their paths to nationhood compare.
+    3. Societal & Cultural Fabric: Compare their demographic textures, languages, core cultural values, and arts.
+    4. Contemporary Global Significance: Evaluate their modern economic engines, geopolitical roles, and shared or contrasting futures.
+
+    Formatting requirements:
+    - Use HTML tags: <h4 style="font-size: 1.15rem; color: var(--accent-primary); margin: 1.25rem 0 0.5rem;">Section Title</h4>
+    - Wrap paragraphs in <p style="margin-bottom: 1rem; line-height: 1.8;">...</p>
+    - Highlight notable historical figures, treaties, geographic landmarks, or cultural terms with <span class="essay-highlight">term</span>.
+    - Write with documentary gravitas, rich prose, and insightful comparative synthesis.
+    `;
+
+    try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: promptText }]
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Gemini API error status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (responseText) {
+            const cleanedHtml = responseText.replace(/```html/gi, "").replace(/```/g, "").trim();
+            if (compareEssayContent) {
+                compareEssayContent.innerHTML = `
+                    <div style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                        <span class="compare-tray-badge">AI Comparative Synthesis</span>
+                        <h3 style="font-size: 1.35rem; color: var(--text-primary); margin-top: 0.35rem;">
+                            ${namesList}: A Comparative Documentary Study
+                        </h3>
+                    </div>
+                    ${cleanedHtml}
+                `;
+            }
+            if (compareReadAloudBtn) {
+                compareReadAloudBtn.classList.remove("hidden");
+            }
+            return;
+        }
+    } catch (err) {
+        console.warn("Gemini Comparative Essay API call failed, generating documentary essay fallback:", err);
+    }
+
+    // Fallback Documentary Synthesis if API offline
+    const fallbackHtml = generateFallbackComparativeEssay(selectedCompareCountries);
+    if (compareEssayContent) {
+        compareEssayContent.innerHTML = `
+            <div style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                <span class="compare-tray-badge">Documentary Synthesis</span>
+                <h3 style="font-size: 1.35rem; color: var(--text-primary); margin-top: 0.35rem;">
+                    ${namesList}: A Comparative Study
+                </h3>
+            </div>
+            ${fallbackHtml}
+        `;
+    }
+    if (compareReadAloudBtn) {
+        compareReadAloudBtn.classList.remove("hidden");
+    }
+}
+
+/**
+ * High-quality fallback generator when network/API is unavailable
+ */
+function generateFallbackComparativeEssay(countries) {
+    const names = countries.map(c => c.name?.common || "Nation");
+    const nameString = names.join(" and ");
+    const regions = [...new Set(countries.map(c => c.region || "Global"))].join(" and ");
+    
+    // Sort by population to highlight demographic contrast
+    const sortedByPop = [...countries].sort((a, b) => (b.population || 0) - (a.population || 0));
+    const mostPopulous = sortedByPop[0];
+    const leastPopulous = sortedByPop[sortedByPop.length - 1];
+
+    // Sort by area
+    const sortedByArea = [...countries].sort((a, b) => (b.area || 0) - (a.area || 0));
+    const largestArea = sortedByArea[0];
+
+    return `
+        <h4 style="font-size: 1.15rem; color: var(--accent-primary); margin: 1.25rem 0 0.5rem;">
+            1. Geographic & Environmental Juxtaposition
+        </h4>
+        <p style="margin-bottom: 1rem; line-height: 1.8;">
+            Encompassing the distinct landscapes of <span class="essay-highlight">${regions}</span>, the comparison between <strong>${nameString}</strong> illustrates the profound relationship between sovereign geography and human habitation. <strong>${largestArea.name?.common}</strong> spans an expansive territory of <span class="essay-highlight">${largestArea.area ? largestArea.area.toLocaleString() + ' km²' : 'vast territories'}</span>, presenting diverse ecological biomes, river basins, and topographical variety. In contrast, its comparative counterparts occupy distinctive spatial footprints that have channeled population settlements toward urban centers and coastal gateways.
+        </p>
+
+        <h4 style="font-size: 1.15rem; color: var(--accent-primary); margin: 1.25rem 0 0.5rem;">
+            2. Historical Crossroads & Divergence
+        </h4>
+        <p style="margin-bottom: 1rem; line-height: 1.8;">
+            Across centuries of human history, <strong>${nameString}</strong> have navigated distinct pathways to sovereignty. While one has been shaped by ancient maritime commerce and territorial alliances, others developed around agrarian dynasties, regional confederations, and constitutional evolutions. The emergence of modern statehood for each nation reflects enduring struggles for self-determination, codified governance, and the preservation of indigenous cultural memory amidst an interconnected world order.
+        </p>
+
+        <h4 style="font-size: 1.15rem; color: var(--accent-primary); margin: 1.25rem 0 0.5rem;">
+            3. Societal & Demographic Fabric
+        </h4>
+        <p style="margin-bottom: 1rem; line-height: 1.8;">
+            Demographically, these nations exhibit compelling contrasts. <strong>${mostPopulous.name?.common}</strong> commands a vibrant populace of <span class="essay-highlight">${formatPopulationDisplay(mostPopulous.population)}</span> citizens, anchoring significant regional human capital and linguistic pluralism. Meanwhile, <strong>${leastPopulous.name?.common}</strong>, with a population of <span class="essay-highlight">${formatPopulationDisplay(leastPopulous.population)}</span>, models a distinct communal density and social structure. Linguistic diversity across these sovereign borders encompasses languages such as <span class="essay-highlight">${countries.map(c => c.languages ? Object.values(c.languages).join(", ") : "indigenous tongues").join("; ")}</span>, each expressing centuries of cultural wisdom and folklore.
+        </p>
+
+        <h4 style="font-size: 1.15rem; color: var(--accent-primary); margin: 1.25rem 0 0.5rem;">
+            4. Contemporary Global Horizons
+        </h4>
+        <p style="margin-bottom: 1rem; line-height: 1.8;">
+            In the contemporary geopolitical landscape, <strong>${nameString}</strong> each fulfill vital multilateral roles. From international commerce and natural resource stewardship to technological innovation and cultural diplomacy, their respective capitals—<span class="essay-highlight">${countries.map(c => c.capital ? c.capital.join(", ") : "national capitals").join(", ")}</span>—serve as command hubs for international diplomacy. Examining these nations side-by-side demonstrates both the extraordinary diversity of human organization and the shared planetary challenges uniting them.
+        </p>
+    `;
+}
+
+/**
+ * Web Speech API - Narrate Comparative Essay aloud
+ */
+function toggleCompareSpeechSynthesis() {
+    if (!('speechSynthesis' in window)) {
+        alert("Text-To-Speech is not supported by your browser.");
+        return;
+    }
+
+    if (isCompareSpeaking) {
+        window.speechSynthesis.cancel();
+        isCompareSpeaking = false;
+        if (compareReadAloudBtn) {
+            compareReadAloudBtn.classList.remove("speaking");
+            const span = compareReadAloudBtn.querySelector("span");
+            if (span) span.textContent = "Narrate Essay";
+        }
+        return;
+    }
+
+    const textToSpeak = compareEssayContent ? compareEssayContent.innerText : "";
+    if (!textToSpeak) return;
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => {
+        isCompareSpeaking = false;
+        if (compareReadAloudBtn) {
+            compareReadAloudBtn.classList.remove("speaking");
+            const span = compareReadAloudBtn.querySelector("span");
+            if (span) span.textContent = "Narrate Essay";
+        }
+    };
+
+    utterance.onerror = () => {
+        isCompareSpeaking = false;
+        if (compareReadAloudBtn) {
+            compareReadAloudBtn.classList.remove("speaking");
+            const span = compareReadAloudBtn.querySelector("span");
+            if (span) span.textContent = "Narrate Essay";
+        }
+    };
+
+    window.speechSynthesis.speak(utterance);
+    isCompareSpeaking = true;
+    if (compareReadAloudBtn) {
+        compareReadAloudBtn.classList.add("speaking");
+        const span = compareReadAloudBtn.querySelector("span");
+        if (span) span.textContent = "Stop Narrator";
     }
 }
